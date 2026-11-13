@@ -1,0 +1,213 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum ProfileMaturity {
+  GENERAL
+  TEEN
+  ADULT
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  passwordHash  String?
+  role          UserRole  @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+  profiles       Profile[]
+  subscriptions  Subscription[]
+  deviceSessions DeviceSession[]
+  watchHistory   WatchHistory[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Profile {
+  id        String          @id @default(cuid())
+  userId    String
+  name      String
+  avatarUrl String?
+  maturity  ProfileMaturity @default(GENERAL)
+  isPrimary Boolean         @default(false)
+  createdAt DateTime        @default(now())
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  watchHistory WatchHistory[]
+
+  @@map("profiles")
+}
+
+model Subscription {
+  id        String   @id @default(cuid())
+  userId    String
+  plan      String   @default("free")
+  status    String   @default("active")
+  startedAt DateTime @default(now())
+  renewedAt DateTime?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model DeviceSession {
+  id         String   @id @default(cuid())
+  userId     String
+  deviceId   String   @unique
+  deviceName String?
+  platform   String?
+  userAgent  String?
+  ipAddress  String?
+  lastSeenAt DateTime @default(now())
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("device_sessions")
+}
+
+model Media {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  synopsis    String?
+  releaseYear Int?
+  runtimeMin  Int?
+  posterUrl   String?
+  backdropUrl String?
+  language    String?
+  genres      String[] @default([])
+  isAdult     Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assets       MediaAsset[]
+  subtitles    Subtitle[]
+  watchHistory WatchHistory[]
+  recommendations Recommendation[]
+
+  @@map("media")
+}
+
+model MediaAsset {
+  id        String   @id @default(cuid())
+  mediaId   String
+  media     Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  kind      String   @default("hls")
+  variant   String   @default("1080p")
+  width     Int?
+  height    Int?
+  bitrateKbps Int?
+  status    String   @default("processing")
+  masterUrl String?
+  playlistUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("media_assets")
+}
+
+model Subtitle {
+  id        String   @id @default(cuid())
+  mediaId   String
+  media     Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  language  String
+  label     String
+  vttUrl    String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("subtitles")
+}
+
+model WatchHistory {
+  id               String   @id @default(cuid())
+  userId           String
+  profileId        String
+  mediaId          String
+  currentPositionMs BigInt
+  durationMs       BigInt
+  completed        Boolean  @default(false)
+  lastWatchedAt    DateTime @default(now())
+  createdAt        DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  media   Media   @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@map("watch_history")
+}
+
+model Recommendation {
+  id        String   @id @default(cuid())
+  userId    String
+  mediaId   String
+  score     Float    @default(0)
+  reason    String?
+  createdAt DateTime @default(now())
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@map("recommendations")
+}
