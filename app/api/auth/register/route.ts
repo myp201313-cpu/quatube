@@ -1,53 +1,47 @@
 import { NextResponse } from "next/server";
 import { hash } from "bcryptjs";
+import { z } from "zod";
 
 import prisma from "@/lib/prisma";
 
+const registrationSchema = z.object({
+  email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
+  password: z.string().min(12).max(128),
+  name: z.string().trim().min(1).max(80).optional(),
+});
+
 export async function POST(request: Request) {
+  let input: z.infer<typeof registrationSchema>;
+
   try {
-    const body = await request.json();
-    const email = String(body.email ?? "").trim().toLowerCase();
-    const password = String(body.password ?? "");
-    const name = String(body.name ?? "").trim();
+    input = registrationSchema.parse(await request.json());
+  } catch {
+    return NextResponse.json(
+      { error: "Provide a valid email, name, and password of at least 12 characters." },
+      { status: 400 },
+    );
+  }
 
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
-    }
-
-    if (password.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
-    }
-
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      return NextResponse.json({ error: "User already exists." }, { status: 409 });
-    }
-
-    const passwordHash = await hash(password, 12);
-
+  try {
     const user = await prisma.user.create({
       data: {
-        email,
-        name: name || email.split("@")[0],
-        passwordHash,
+        email: input.email,
+        name: input.name || input.email.split("@")[0],
+        passwordHash: await hash(input.password, 12),
         profiles: {
-          create: [{
-            name: "Default",
-            isPrimary: true,
-            maturity: "GENERAL",
-          }],
+          create: [{ name: "Default", isPrimary: true, maturity: "GENERAL" }],
         },
       },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-      },
+      select: { id: true, email: true, name: true },
     });
 
-    return NextResponse.json({ message: "User registered successfully.", user }, { status: 201 });
+    return NextResponse.json({ user }, { status: 201 });
   } catch (error) {
-    console.error("Register error:", error);
-    return NextResponse.json({ error: "Failed to register user." }, { status: 500 });
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
+      return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });
+    }
+
+    console.error("Registration failed:", error);
+    return NextResponse.json({ error: "Unable to create account." }, { status: 500 });
   }
 }
