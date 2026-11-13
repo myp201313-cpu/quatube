@@ -1,64 +1,57 @@
-# QuatuBe development setup
+# Runtime setup and current implementation status
 
-## Requirements
+## Local setup
 
-- Node.js 20+
-- Docker Compose
-- FFmpeg installed locally (`ffmpeg -version`)
+1. Install Node.js 20+, Docker Compose, and FFmpeg (`ffmpeg -version`).
+2. Start PostgreSQL, Redis, and MinIO:
 
-## Start local dependencies
+   ```bash
+   docker compose up -d
+   ```
+
+3. Configure local secrets and environment:
+
+   ```bash
+   cp .env.example .env.local
+   openssl rand -base64 32
+   ```
+
+   Set `AUTH_SECRET` to the generated value. Configure Google OAuth only if using it. Never commit `.env.local`.
+
+4. Install, generate, and start:
+
+   ```bash
+   npm install
+   npx prisma generate
+   npx prisma db push
+   npm run dev
+   ```
+
+5. In another terminal, run the HLS worker:
+
+   ```bash
+   npm run worker
+   ```
+
+## Implemented foundation
+
+- Next.js App Router, TypeScript, Tailwind, PWA manifest and service-worker shell
+- Credentials and optional Google auth through Auth.js, Prisma persistence, registration, and user profiles
+- PostgreSQL schema for media, profiles, subscriptions, watch history, assets, and editorial audit records
+- Admin media metadata endpoint, presigned MP4 upload, BullMQ enqueue/status APIs, and isolated FFmpeg worker producing HLS renditions
+- Role-gated editorial transitions and a basic admin catalog dashboard
+- Watch-progress persistence with profile ownership checks
+
+## Known integration boundary
+
+The app deliberately fails closed for playback authorization. A protected CDN/edge signer must be configured before playback URLs are returned. Do not make the MinIO/S3 bucket public and do not expose source MP4 keys or direct object URLs. The earlier TMDB credentials pasted into chat must be rotated before use.
+
+## Validation
 
 ```bash
-docker compose up -d
-cp .env.example .env.local
-# Set AUTH_SECRET to a fresh secret before starting the app.
+npm run typecheck
+npm run build
+curl -i http://localhost:3000/api/health
 ```
 
-Generate a secret with:
-
-```bash
-openssl rand -base64 32
-```
-
-## Install and initialize
-
-```bash
-npm install
-npx prisma generate
-npx prisma db push
-npm run dev
-```
-
-In another terminal, start the background transcoding worker:
-
-```bash
-npm run worker
-```
-
-The app is available at http://localhost:3000. Create an account at `/register`, then sign in at `/login`. To try Google OAuth, configure `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env.local`.
-
-## Admin upload and transcode API
-
-Promote a local test user to ADMIN using Prisma Studio (`npx prisma studio`) or a controlled SQL operation. Do not expose public admin self-registration.
-
-1. Create a draft media record:
-
-```bash
-curl -X POST http://localhost:3000/api/admin/media \
-  -H 'Content-Type: application/json' \
-  -b 'your-auth-cookie' \
-  -d '{"title":"Sample Film","slug":"sample-film","synopsis":"A demo title","releaseYear":2025,"genres":["Drama"]}'
-```
-
-2. Request an upload URL at `POST /api/admin/media/{mediaId}/upload-url` with JSON `{"fileName":"sample.mp4","contentType":"video/mp4"}`. Upload the file with an HTTP `PUT` to the returned `uploadUrl`.
-3. Call `POST /api/admin/media/{mediaId}/transcode` to enqueue work. Check `GET /api/admin/media/{mediaId}/status` and worker logs.
-
-The worker generates HLS renditions and stores them in the private MinIO bucket. Playback authorization/CDN edge validation is intentionally not exposed by this starter yet: do not make the bucket public or use the stored object key as a client URL. Protect every manifest and segment at the CDN before enabling production playback.
-
-## Security notes
-
-- Never commit `.env.local` or real API credentials.
-- The TMDB credentials pasted in the original conversation must be rotated before use.
-- Registration currently creates consumer accounts; admin/editor roles must be assigned through a trusted operator path.
-- Use Prisma migrations for deployed environments; `db push` is for local prototyping only.
-- Local MinIO credentials and PostgreSQL passwords are development-only.
+This repository has not been executed in this environment, so run these commands locally and inspect build/runtime output before deployment. `prisma db push` is appropriate for local setup; use committed Prisma migrations in shared or production environments.

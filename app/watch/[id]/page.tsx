@@ -1,51 +1,30 @@
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 import { VideoPlayer } from "@/components/VideoPlayer";
 
-export default function WatchPage({ params }: { params: { id: string } }) {
-  const streamUrl = `https://cdn.example.com/videos/${params.id}/master.m3u8`;
+export default async function WatchPage({ params }: { params: { id: string } }) {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+
+  const media = await prisma.media.findFirst({
+    where: { id: params.id, status: "PUBLISHED", isActive: true },
+    include: { subtitles: { orderBy: { isDefault: "desc" } } },
+  });
+  if (!media) redirect("/dashboard");
+
+  // Do not embed public/raw storage paths here. Playback must be authorized by an edge/CDN signer.
+  const streamUrl = process.env.NEXT_PUBLIC_PLAYBACK_URL
+    ? `${process.env.NEXT_PUBLIC_PLAYBACK_URL}/${encodeURIComponent(media.id)}/master.m3u8`
+    : null;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="mx-auto max-w-7xl px-4 py-8">
-        <div className="mb-6">
-          <p className="text-xs uppercase tracking-[0.28em] text-red-400">Continue Watching</p>
-          <h1 className="mt-2 text-3xl font-bold md:text-5xl">The Midnight Signal</h1>
-        </div>
-
-        <VideoPlayer title="The Midnight Signal" poster="https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=1600&q=80" streamUrl={streamUrl} />
-
-        <div className="mt-8 grid gap-6 lg:grid-cols-[1.5fr_0.8fr]">
-          <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
-            <h2 className="text-xl font-semibold">Overview</h2>
-            <p className="mt-3 text-sm leading-7 text-slate-300">
-              A rogue signal begins broadcasting across the world’s forgotten infrastructure.
-              A gifted cryptographer tries to decode it before an AI system rewrites the future.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-2">
-              {[
-                "Sci-Fi",
-                "Thriller",
-                "2025",
-                "HD",
-                "4K",
-              ].map((tag) => (
-                <span key={tag} className="rounded-full border border-white/10 bg-slate-800 px-3 py-1 text-xs text-slate-200">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </section>
-
-          <aside className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
-            <h3 className="text-lg font-semibold">Details</h3>
-            <ul className="mt-4 space-y-3 text-sm text-slate-300">
-              <li>Genre: Sci-Fi / Thriller</li>
-              <li>Runtime: 118 min</li>
-              <li>Audio: English, Spanish</li>
-              <li>Subtitles: English, Spanish, French</li>
-              <li>Quality: 1080p, 720p, 480p</li>
-            </ul>
-          </aside>
-        </div>
+    <main className="min-h-screen bg-slate-950 px-4 py-8 text-white">
+      <div className="mx-auto max-w-7xl">
+        <p className="text-xs uppercase tracking-[0.28em] text-red-400">Now playing</p>
+        <h1 className="mb-6 mt-2 text-3xl font-bold md:text-5xl">{media.title}</h1>
+        {streamUrl ? <VideoPlayer title={media.title} poster={media.backdropUrl ?? media.posterUrl ?? undefined} streamUrl={streamUrl} /> : <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-5 text-amber-100">Playback delivery is not configured. Configure a protected CDN playback origin before enabling streams.</div>}
+        <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900/60 p-5"><h2 className="text-xl font-semibold">Overview</h2><p className="mt-3 text-sm leading-7 text-slate-300">{media.synopsis ?? "No synopsis is available."}</p><div className="mt-5 flex flex-wrap gap-2">{media.genres.map((genre) => <span key={genre} className="rounded-full border border-white/10 bg-slate-800 px-3 py-1 text-xs">{genre}</span>)}</div></section>
       </div>
     </main>
   );
