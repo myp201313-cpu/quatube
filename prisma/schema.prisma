@@ -29,22 +29,23 @@ enum MediaStatus {
 }
 
 model User {
-  id             String             @id @default(cuid())
-  email          String             @unique
-  emailVerified  DateTime?
-  name           String?
-  image          String?
-  passwordHash   String?
-  role           UserRole           @default(USER)
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  accounts       Account[]
-  sessions       Session[]
-  profiles       Profile[]
-  subscriptions  Subscription[]
-  deviceSessions DeviceSession[]
-  watchHistory   WatchHistory[]
+  id              String              @id @default(cuid())
+  email           String              @unique
+  emailVerified   DateTime?
+  name            String?
+  image           String?
+  passwordHash    String?
+  role            UserRole            @default(USER)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  accounts        Account[]
+  sessions        Session[]
+  profiles        Profile[]
+  subscriptions   Subscription[]
+  deviceSessions  DeviceSession[]
+  watchHistory    WatchHistory[]
   recommendations Recommendation[]
+  reviewActions   MediaReviewAction[]
 
   @@map("users")
 }
@@ -88,15 +89,15 @@ model VerificationToken {
 }
 
 model Profile {
-  id             String          @id @default(cuid())
-  userId         String
-  name           String
-  avatarUrl      String?
-  maturity       ProfileMaturity @default(GENERAL)
-  isPrimary      Boolean         @default(false)
-  createdAt      DateTime        @default(now())
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  watchHistory   WatchHistory[]
+  id           String          @id @default(cuid())
+  userId       String
+  name         String
+  avatarUrl    String?
+  maturity     ProfileMaturity @default(GENERAL)
+  isPrimary    Boolean         @default(false)
+  createdAt    DateTime        @default(now())
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  watchHistory WatchHistory[]
 
   @@index([userId])
   @@map("profiles")
@@ -135,49 +136,52 @@ model DeviceSession {
 }
 
 model Media {
-  id              String             @id @default(cuid())
+  id              String              @id @default(cuid())
   title           String
-  slug            String             @unique
+  slug            String              @unique
   synopsis        String?
   releaseYear     Int?
   runtimeMin      Int?
   posterUrl       String?
   backdropUrl     String?
   language        String?
-  genres          String[]           @default([])
-  isAdult         Boolean            @default(false)
-  status          MediaStatus        @default(DRAFT)
-  isActive        Boolean            @default(false)
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  genres          String[]            @default([])
+  isAdult         Boolean             @default(false)
+  status          MediaStatus         @default(DRAFT)
+  isActive        Boolean             @default(false)
+  submittedAt     DateTime?
+  publishedAt     DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
   assets          MediaAsset[]
   subtitles       Subtitle[]
   watchHistory    WatchHistory[]
   recommendations Recommendation[]
+  reviewActions   MediaReviewAction[]
 
   @@index([status, isActive])
   @@map("media")
 }
 
 model MediaAsset {
-  id             String   @id @default(cuid())
-  mediaId        String
-  media          Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
-  kind           String   @default("hls")
-  variant        String   @default("master")
-  width          Int?
-  height         Int?
-  bitrateKbps    Int?
-  status         String   @default("pending")
-  sourceKey      String?
-  outputPrefix   String?
-  masterKey      String?
-  masterUrl      String?
-  playlistUrl    String?
-  variantUrls    String[] @default([])
-  errorMessage   String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id           String   @id @default(cuid())
+  mediaId      String
+  media        Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  kind         String   @default("hls")
+  variant      String   @default("master")
+  width        Int?
+  height       Int?
+  bitrateKbps  Int?
+  status       String   @default("pending")
+  sourceKey    String?
+  outputPrefix String?
+  masterKey    String?
+  masterUrl    String?
+  playlistUrl  String?
+  variantUrls  String[] @default([])
+  errorMessage String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@unique([mediaId, kind, variant])
   @@index([status])
@@ -230,4 +234,19 @@ model Recommendation {
   @@unique([userId, mediaId])
   @@index([userId, score])
   @@map("recommendations")
+}
+
+model MediaReviewAction {
+  id        String   @id @default(uuid())
+  mediaId   String
+  actorId   String
+  action    String
+  note      String?
+  createdAt DateTime @default(now())
+  media     Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  actor     User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([mediaId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("media_review_actions")
 }
